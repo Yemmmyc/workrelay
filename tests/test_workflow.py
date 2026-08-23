@@ -3,6 +3,7 @@ from app.models.incident import (
     IncidentSeverity,
     IncidentStatus,
 )
+from app.agent.coordinator import IncidentCoordinator
 from app.services.state_store import LocalStateStore
 from app.workflows.incident_workflow import IncidentWorkflow
 from app.workflows.registry import select_workflow
@@ -190,3 +191,81 @@ def test_workflow_persists_final_state(tmp_path):
     assert saved.current_step == "incident_resolved"
     assert saved.workflow == "standard_incident"
     assert saved.resolution is not None
+
+def test_coordinator_routes_and_executes_incident(tmp_path):
+    store = LocalStateStore(tmp_path / "incidents.json")
+
+    incident = Incident(
+        title="Payment API failure",
+        description="Payment requests are returning HTTP 500 errors.",
+        service="payment-api",
+        severity=IncidentSeverity.HIGH,
+    )
+
+    coordinator = IncidentCoordinator(store)
+    result = coordinator.handle(incident)
+
+    assert result.status == IncidentStatus.RESOLVED
+    assert result.workflow == "high_severity_incident"
+
+    coordination = result.metadata["coordination"]
+
+    assert coordination["decision_provider"] == "LocalDecisionProvider"
+    assert "HIGH" in coordination["reasoning"]
+
+
+def test_coordinator_preserves_failure_and_escalates(tmp_path):
+    store = LocalStateStore(tmp_path / "incidents.json")
+
+    incident = Incident(
+        title="Critical service failure",
+        description="Core API remediation failed.",
+        service="core-api",
+        severity=IncidentSeverity.CRITICAL,
+        metadata={
+            "force_remediation_failure": True,
+        },
+    )
+
+    coordinator = IncidentCoordinator(store)
+    result = coordinator.handle(incident)
+
+    assert result.status == IncidentStatus.ESCALATED
+    assert result.workflow == "critical_incident"
+    assert result.retry_count == 0
+    assert result.escalation_reason is not None
+
+
+def test_coordinator_uses_injected_decision_provider(tmp_path):
+    class StubDecisionProvider:
+        def decide(self, incident):
+            from app.agent.decision import CoordinationDecision
+            from app.workflows.registry import get_workflow
+
+            return CoordinationDecision(
+                workflow=get_workflow("standard_incident"),
+                reasoning="Test decision provider selected standard workflow.",
+            )
+
+    store = LocalStateStore(tmp_path / "incidents.json")
+
+    incident = Incident(
+        title="Test incident",
+        description="Testing coordinator dependency injection.",
+        service="test-service",
+        severity=IncidentSeverity.CRITICAL,
+    )
+
+    coordinator = IncidentCoordinator(
+        store,
+        decision_provider=StubDecisionProvider(),
+    )
+
+    result = coordinator.handle(incident)
+
+    assert result.status == IncidentStatus.RESOLVED
+    assert result.workflow == "standard_incident"
+    assert (
+        result.metadata["coordination"]["decision_provider"]
+        == "StubDecisionProvider"
+    )

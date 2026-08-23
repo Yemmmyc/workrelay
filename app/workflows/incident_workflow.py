@@ -8,7 +8,11 @@ from app.actions.incident_actions import (
 from app.actions.notification_actions import record_escalation
 from app.models.incident import Incident, IncidentStatus
 from app.services.state_store import LocalStateStore
-from app.workflows.registry import select_workflow
+from app.workflows.registry import (
+    WorkflowDefinition,
+    get_workflow,
+    select_workflow,
+)
 
 
 class IncidentWorkflow:
@@ -16,7 +20,7 @@ class IncidentWorkflow:
     Executes the WorkRelay incident lifecycle.
 
     The workflow engine owns state transitions and reliability behavior.
-    External intelligence or agent decisions can later select the workflow,
+    External intelligence or agent decisions can select the workflow,
     but execution remains controlled here.
     """
 
@@ -36,17 +40,25 @@ class IncidentWorkflow:
         incident.current_step = step
         self._save(incident)
 
-    def start(self, incident: Incident) -> Incident:
+    def start(
+        self,
+        incident: Incident,
+        workflow: WorkflowDefinition | None = None,
+    ) -> Incident:
         """
         Start processing an incident.
 
-        The incident must already exist in the state store.
+        If a workflow is explicitly supplied by the Coordinator, that
+        decision is authoritative. Direct callers without a workflow
+        receive deterministic severity-based routing.
         """
 
         if self.state_store.get(incident.id) is None:
             self.state_store.create(incident)
 
-        workflow = select_workflow(incident.severity)
+        if workflow is None:
+            workflow = select_workflow(incident.severity)
+
         incident.workflow = workflow.name
 
         self._transition(
@@ -116,7 +128,15 @@ class IncidentWorkflow:
         incident: Incident,
         reason: str,
     ) -> Incident:
-        workflow = select_workflow(incident.severity)
+        """
+        Handle an action failure using the workflow that was selected
+        for this incident.
+        """
+
+        if incident.workflow is not None:
+            workflow = get_workflow(incident.workflow)
+        else:
+            workflow = select_workflow(incident.severity)
 
         incident.metadata.setdefault("failures", []).append(reason)
 
