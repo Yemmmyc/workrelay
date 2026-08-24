@@ -4,6 +4,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
 from app.agent.coordinator import IncidentCoordinator
+from app.agent.provider_factory import create_decision_provider
 from app.models.incident import Incident, IncidentSeverity
 from app.services.state_store import LocalStateStore
 
@@ -28,8 +29,11 @@ class IncidentResponse(BaseModel):
 
 
 store = LocalStateStore()
-coordinator = IncidentCoordinator(store)
-
+decision_provider = create_decision_provider()
+coordinator = IncidentCoordinator(
+    store,
+    decision_provider=decision_provider,
+)
 
 @app.get("/health")
 def health() -> dict[str, str]:
