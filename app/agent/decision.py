@@ -145,7 +145,7 @@ class GeminiDecisionProvider:
 
         try:
             workflow = get_workflow(response.workflow)
-        except KeyError as exc:
+        except ValueError as exc:
             raise ValueError(
                 f"Gemini selected an unknown workflow: {response.workflow}"
             ) from exc

@@ -269,3 +269,48 @@ def test_coordinator_uses_injected_decision_provider(tmp_path):
         result.metadata["coordination"]["decision_provider"]
         == "StubDecisionProvider"
     )
+
+def test_gemini_decision_provider_rejects_unknown_workflow():
+    from types import SimpleNamespace
+
+    from app.agent.decision import GeminiDecisionProvider
+
+    provider = GeminiDecisionProvider()
+
+    provider.session_service = SimpleNamespace(
+        create_session=lambda **kwargs: SimpleNamespace(
+            id="test-session"
+        )
+    )
+
+    provider.runner = SimpleNamespace(
+        run=lambda **kwargs: iter(
+            [
+                SimpleNamespace(
+                    content=SimpleNamespace(
+                        parts=[
+                            SimpleNamespace(
+                                text=(
+                                    '{"workflow":"invented_workflow",'
+                                    '"reasoning":"Invalid test workflow."}'
+                                )
+                            )
+                        ]
+                    )
+                )
+            ]
+        )
+    )
+
+    incident = Incident(
+        title="Test incident",
+        description="Testing invalid Gemini workflow handling.",
+        service="test-service",
+        severity=IncidentSeverity.HIGH,
+    )
+
+    try:
+        provider.decide(incident)
+        assert False, "Expected invalid workflow to be rejected"
+    except ValueError as exc:
+        assert "Gemini selected an unknown workflow" in str(exc)
