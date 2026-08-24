@@ -314,3 +314,51 @@ def test_gemini_decision_provider_rejects_unknown_workflow():
         assert False, "Expected invalid workflow to be rejected"
     except ValueError as exc:
         assert "Gemini selected an unknown workflow" in str(exc)
+
+def test_gemini_decision_provider_returns_valid_workflow():
+    from types import SimpleNamespace
+
+    from app.agent.decision import GeminiDecisionProvider
+
+    provider = GeminiDecisionProvider()
+
+    provider.session_service = SimpleNamespace(
+        create_session=lambda **kwargs: SimpleNamespace(
+            id="test-session"
+        )
+    )
+
+    provider.runner = SimpleNamespace(
+        run=lambda **kwargs: iter(
+            [
+                SimpleNamespace(
+                    content=SimpleNamespace(
+                        parts=[
+                            SimpleNamespace(
+                                text=(
+                                    '{"workflow":"high_severity_incident",'
+                                    '"reasoning":"HIGH severity requires '
+                                    'cautious coordination."}'
+                                )
+                            )
+                        ]
+                    )
+                )
+            ]
+        )
+    )
+
+    incident = Incident(
+        title="Payment API failure",
+        description="Payment requests are returning HTTP 500 errors.",
+        service="payment-api",
+        severity=IncidentSeverity.HIGH,
+    )
+
+    result = provider.decide(incident)
+
+    assert result.workflow.name == "high_severity_incident"
+    assert (
+        result.reasoning
+        == "HIGH severity requires cautious coordination."
+    )
