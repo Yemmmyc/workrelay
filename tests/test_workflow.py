@@ -362,3 +362,48 @@ def test_gemini_decision_provider_returns_valid_workflow():
         result.reasoning
         == "HIGH severity requires cautious coordination."
     )
+
+def test_provider_factory_defaults_to_local(monkeypatch):
+    from app.agent.provider_factory import create_decision_provider
+    from app.agent.decision import LocalDecisionProvider
+
+    monkeypatch.delenv("WORKRELAY_DECISION_PROVIDER", raising=False)
+
+    provider = create_decision_provider()
+
+    assert isinstance(provider, LocalDecisionProvider)
+
+
+def test_provider_factory_selects_local(monkeypatch):
+    from app.agent.provider_factory import create_decision_provider
+    from app.agent.decision import LocalDecisionProvider
+
+    monkeypatch.setenv("WORKRELAY_DECISION_PROVIDER", "local")
+
+    provider = create_decision_provider()
+
+    assert isinstance(provider, LocalDecisionProvider)
+
+
+def test_provider_factory_selects_gemini(monkeypatch):
+    from app.agent.provider_factory import create_decision_provider
+    from app.agent.decision import GeminiDecisionProvider
+
+    monkeypatch.setenv("WORKRELAY_DECISION_PROVIDER", "gemini")
+
+    provider = create_decision_provider()
+
+    assert isinstance(provider, GeminiDecisionProvider)
+
+
+def test_provider_factory_rejects_invalid_provider(monkeypatch):
+    from app.agent.provider_factory import create_decision_provider
+
+    monkeypatch.setenv("WORKRELAY_DECISION_PROVIDER", "banana")
+
+    try:
+        create_decision_provider()
+    except ValueError as exc:
+        assert "Unsupported WORKRELAY_DECISION_PROVIDER" in str(exc)
+    else:
+        raise AssertionError("Expected ValueError for invalid provider")
