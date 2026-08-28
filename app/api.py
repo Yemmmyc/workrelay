@@ -4,16 +4,8 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
 from app.agent.coordinator import IncidentCoordinator
-from app.agent.provider_factory import create_decision_provider
 from app.models.incident import Incident, IncidentSeverity
 from app.services.state_store import LocalStateStore
-
-
-app = FastAPI(
-    title="WorkRelay",
-    description="Automated operational incident coordination system.",
-    version="0.1.0",
-)
 
 
 class IncidentRequest(BaseModel):
@@ -28,49 +20,44 @@ class IncidentResponse(BaseModel):
     incident: Incident
 
 
-store = LocalStateStore()
-decision_provider = create_decision_provider()
-coordinator = IncidentCoordinator(
-    store,
-    decision_provider=decision_provider,
-)
+def create_routes(
+    app: FastAPI,
+    store: LocalStateStore,
+    coordinator: IncidentCoordinator,
+) -> None:
+    @app.get("/health")
+    def health() -> dict[str, str]:
+        return {
+            "status": "healthy",
+            "service": "workrelay",
+        }
 
-@app.get("/health")
-def health() -> dict[str, str]:
-    return {
-        "status": "healthy",
-        "service": "workrelay",
-    }
-
-
-@app.post("/incidents", response_model=IncidentResponse)
-def create_incident(request: IncidentRequest) -> IncidentResponse:
-    incident = Incident(
-        title=request.title,
-        description=request.description,
-        service=request.service,
-        severity=request.severity,
-        metadata=request.metadata,
-    )
-
-    result = coordinator.handle(incident)
-
-    return IncidentResponse(incident=result)
-
-
-@app.get("/incidents/{incident_id}", response_model=IncidentResponse)
-def get_incident(incident_id: str) -> IncidentResponse:
-    incident = store.get(incident_id)
-
-    if incident is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Incident {incident_id} not found.",
+    @app.post("/incidents", response_model=IncidentResponse)
+    def create_incident(request: IncidentRequest) -> IncidentResponse:
+        incident = Incident(
+            title=request.title,
+            description=request.description,
+            service=request.service,
+            severity=request.severity,
+            metadata=request.metadata,
         )
 
-    return IncidentResponse(incident=incident)
+        result = coordinator.handle(incident)
 
+        return IncidentResponse(incident=result)
 
-@app.get("/incidents", response_model=list[Incident])
-def list_incidents() -> list[Incident]:
-    return store.list_all()
+    @app.get("/incidents/{incident_id}", response_model=IncidentResponse)
+    def get_incident(incident_id: str) -> IncidentResponse:
+        incident = store.get(incident_id)
+
+        if incident is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Incident {incident_id} not found.",
+            )
+
+        return IncidentResponse(incident=incident)
+
+    @app.get("/incidents", response_model=list[Incident])
+    def list_incidents() -> list[Incident]:
+        return store.list_all()
