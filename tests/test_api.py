@@ -51,3 +51,58 @@ def test_list_incidents():
 
     assert response.status_code == 200
     assert isinstance(response.json(), list)
+
+def test_create_app_returns_fastapi_app():
+    from fastapi import FastAPI
+    from app.main import create_app
+
+    test_app = create_app()
+
+    assert isinstance(test_app, FastAPI)
+
+
+def test_create_app_has_expected_routes():
+    from app.main import create_app
+
+    test_app = create_app()
+
+    routes = {
+        route.path
+        for route in test_app.routes
+    }
+
+    assert "/health" in routes
+    assert "/incidents" in routes
+    assert "/incidents/{incident_id}" in routes
+
+
+def test_create_app_with_local_provider(monkeypatch):
+    from app.main import create_app
+
+    monkeypatch.setenv(
+        "WORKRELAY_DECISION_PROVIDER",
+        "local",
+    )
+
+    test_app = create_app()
+    test_client = TestClient(test_app)
+
+    response = test_client.post(
+        "/incidents",
+        json={
+            "title": "Local provider test",
+            "description": "Testing application factory configuration.",
+            "service": "test-api",
+            "severity": "HIGH",
+        },
+    )
+
+    assert response.status_code == 200
+
+    incident = response.json()["incident"]
+
+    assert incident["workflow"] == "high_severity_incident"
+    assert (
+        incident["metadata"]["coordination"]["decision_provider"]
+        == "LocalDecisionProvider"
+    )
