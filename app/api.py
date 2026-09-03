@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 
 from app.agent.coordinator import IncidentCoordinator
 from app.models.incident import Incident, IncidentSeverity
-from app.services.state_store import LocalStateStore
+from app.services.state_store_interface import StateStore
 
 
 class IncidentRequest(BaseModel):
@@ -22,7 +22,7 @@ class IncidentResponse(BaseModel):
 
 def create_routes(
     app: FastAPI,
-    store: LocalStateStore,
+    store: StateStore,
     coordinator: IncidentCoordinator,
 ) -> None:
     @app.get("/health")
