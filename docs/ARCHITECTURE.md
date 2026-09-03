@@ -2,180 +2,521 @@
 
 ## Overview
 
-WorkRelay separates incident decision-making from operational execution.
+WorkRelay is an automated operational incident coordination system designed around a controlled agentic workflow.
+
+The system separates **AI-assisted decision-making** from **deterministic operational execution**:
+
+> **Gemini recommends the workflow; deterministic application logic executes it.**
+
+This separation allows the decision layer to use an LLM while keeping operational actions constrained to workflows explicitly registered by the application.
+
+## High-level architecture
 
 ```text
-Client
-  |
-  v
-FastAPI
-  |
-  v
-IncidentCoordinator
-  |
-  +--> DecisionProvider
-  |       |
-  |       +--> LocalDecisionProvider
-  |       |
-  |       +--> GeminiDecisionProvider
-  |
-  +--> Workflow Engine
-          |
-          +--> Investigation
-          +--> Remediation
-          +--> Verification
-          +--> Retry / Escalation
-  |
-  v
-LocalStateStore
+                         +----------------------+
+                         |      Incident        |
+                         +----------+-----------+
+                                    |
+                         +----------v-----------+
+                         |    FastAPI / CLI      |
+                         +----------+-----------+
+                                    |
+                         +----------v-----------+
+                         | IncidentCoordinator  |
+                         +----------+-----------+
+                                    |
+                         +----------v-----------+
+                         |  Decision Provider   |
+                         +----------+-----------+
+                                    |
+                    +---------------+---------------+
+                    |                               |
+          +---------v---------+           +---------v---------+
+          |  Local Provider   |           |   Gemini + ADK   |
+          |  deterministic    |           | Gemini 3.5 Flash |
+          +---------+---------+           +---------+---------+
+                    |                               |
+                    +---------------+---------------+
+                                    |
+                         +----------v-----------+
+                         |  Workflow Registry   |
+                         +----------+-----------+
+                                    |
+                         +----------v-----------+
+                         | Deterministic        |
+                         | Incident Workflow    |
+                         +----------+-----------+
+                                    |
+                         +----------+-----------+
+                         |                      |
+                  +------v------+        +------v------+
+                  | Remediation |        | Verification|
+                  +------+------+        +------+------+
+                         |                      |
+                         +----------+-----------+
+                                    |
+                         +----------v-----------+
+                         | Resolved / Escalated |
+                         +----------------------+
+                                    |
+                         +----------v-----------+
+                         |     State Store      |
+                         +----------+-----------+
+                                    |
+                         +----------+-----------+
+                         | Local JSON /         |
+                         | Firestore            |
+                         +----------------------+
 ```
 
-## Application factory
+## Main components
 
-`app/main.py` owns application composition through `create_app()`.
+### 1. FastAPI and CLI interfaces
 
-It creates:
+WorkRelay exposes two ways to submit and operate incidents:
 
-1. FastAPI
-2. State store
-3. Configured decision provider
-4. Incident coordinator
-5. API routes
+- FastAPI HTTP API
+- `run.py` command-line runner
 
-This keeps startup configuration separate from route definitions.
+The interfaces create incident objects and pass them to the coordinator.
 
-## API layer
-
-`app/api.py` provides:
+The API currently provides:
 
 - `GET /health`
 - `POST /incidents`
-- `GET /incidents/{incident_id}`
 - `GET /incidents`
+- `GET /incidents/{incident_id}`
 
-Routes validate requests and delegate processing to the coordinator.
+The CLI is useful for reproducible local demonstrations and failure-path testing.
 
-## Coordinator
+## 2. Incident model
 
-`app/agent/coordinator.py` is the boundary between decision-making and execution.
+The incident model contains the operational context needed by the coordinator and decision provider, including:
 
-It:
+- incident ID
+- title
+- description
+- service
+- severity
+- status
+- current workflow step
+- retry information
+- resolution information
+- metadata
+- lifecycle history
 
-1. receives an incident
-2. asks the decision provider for a workflow
-3. records reasoning and provider metadata
-4. persists the incident
-5. starts the deterministic workflow
+The model is defined using Pydantic and provides validation at the application boundary.
 
-## Decision providers
+## 3. IncidentCoordinator
 
-`app/agent/decision.py` defines the provider abstraction.
+`IncidentCoordinator` is the central orchestration component.
+
+Its responsibilities include:
+
+1. Accepting an incident.
+2. Persisting the incident state.
+3. Asking the configured decision provider to select a workflow.
+4. Validating the selected workflow against the workflow registry.
+5. Executing the selected workflow.
+6. Handling retries and escalation.
+7. Recording lifecycle changes.
+8. Persisting the final incident state.
+
+The coordinator does not need to know whether the decision came from the local provider or Gemini. This is achieved through the `DecisionProvider` abstraction.
+
+## 4. Decision provider abstraction
+
+WorkRelay defines a decision-provider interface so that the intelligence layer can be changed without changing the workflow engine.
+
+```text
+DecisionProvider
+       |
+       +---- LocalDecisionProvider
+       |
+       +---- GeminiDecisionProvider
+```
 
 ### LocalDecisionProvider
 
-A deterministic provider based on incident severity. It requires no external service.
+The local provider makes deterministic decisions based on the application's rules.
+
+It is useful for:
+
+- unit tests
+- development without cloud credentials
+- deterministic demonstrations
+- low-cost development
 
 ### GeminiDecisionProvider
 
-Uses Google ADK and Gemini 3.5 Flash to recommend a registered WorkRelay workflow.
+The Gemini provider uses:
 
-Gemini returns structured data containing a workflow and reasoning.
+- Google ADK
+- Gemini 3.5 Flash
+- Google Cloud / Vertex AI
+- structured output validation
 
-The application rejects unknown workflows.
+The provider sends controlled incident context to Gemini and asks it to select one of the application's supported workflows.
 
-## Provider factory
+Gemini's output is validated before execution.
 
-`app/agent/provider_factory.py` reads:
+The model is therefore used as a **decision layer**, not as an unrestricted execution engine.
+
+## 5. Gemini + Google ADK flow
+
+The Gemini provider creates an ADK agent configured for workflow selection.
+
+Conceptually:
 
 ```text
-WORKRELAY_DECISION_PROVIDER
+Incident context
+      |
+      v
+GeminiDecisionProvider
+      |
+      v
+Google ADK Agent
+      |
+      v
+Gemini 3.5 Flash
+      |
+      v
+Structured coordination response
+      |
+      v
+Workflow validation
+      |
+      v
+IncidentCoordinator
 ```
 
-Supported values:
+The current local configuration uses:
 
 ```text
-local
-gemini
+GOOGLE_GENAI_USE_ENTERPRISE=TRUE
+GOOGLE_CLOUD_PROJECT=workrelay
+GOOGLE_CLOUD_LOCATION=global
 ```
 
-Default:
+The global location is used for the current Gemini configuration because the model is available through that endpoint.
+
+For local development, Google Application Default Credentials are used rather than storing service-account private keys in the repository.
+
+## 6. Workflow Registry
+
+The workflow registry contains the workflows that WorkRelay is allowed to execute.
+
+The decision provider selects from these registered workflows rather than generating arbitrary operational procedures.
+
+This creates a safety boundary:
 
 ```text
-local
+LLM decision
+     |
+     v
+Approved workflow name
+     |
+     v
+Workflow Registry
+     |
+     +---- valid --> execute
+     |
+     +---- invalid -> reject
 ```
 
-## Workflow registry
+This approach keeps the execution surface controlled and testable.
 
-`app/workflows/registry.py` contains the allowed workflows.
+## 7. Deterministic incident workflow
 
-Current workflows include:
+`IncidentWorkflow` performs the operational sequence selected by the coordinator.
 
-- `standard_incident`
-- `high_severity_incident`
-- `critical_incident`
-
-The registry prevents a model response from inventing an executable workflow.
-
-## Deterministic workflow engine
-
-`app/workflows/incident_workflow.py` owns execution.
-
-A typical lifecycle is:
+The workflow can include:
 
 ```text
-Incident
+Investigate
+    |
+    v
+Remediate
+    |
+    v
+Verify
+    |
+    +---- success ---> RESOLVED
+    |
+    +---- failure ---> Retry
+                         |
+                         +---- recovery ---> RESOLVED
+                         |
+                         +---- exhausted -> ESCALATED
+```
+
+The workflow supports simulated failures so retry and escalation behavior can be tested without deliberately causing a real service outage.
+
+## 8. Retry and escalation
+
+WorkRelay treats failure handling as part of the workflow rather than as an afterthought.
+
+A failed operation can:
+
+1. Record the failure.
+2. Increment the retry count.
+3. Retry according to the configured workflow behavior.
+4. Verify recovery.
+5. Resolve the incident if recovery succeeds.
+6. Escalate when recovery cannot be completed.
+
+This allows the system to demonstrate autonomous multi-step behavior rather than simply returning a text response.
+
+## 9. State management
+
+State persistence is abstracted behind the `StateStore` interface.
+
+```text
+StateStore
+    |
+    +---- LocalStateStore
+    |
+    +---- FirestoreStateStore
+```
+
+### Local state
+
+The local store is intended for development and testing.
+
+It provides a simple JSON-backed persistence mechanism.
+
+### Firestore
+
+The Firestore implementation uses Google Cloud Firestore for persistent incident state.
+
+The current Google Cloud project contains a Firestore Native database in:
+
+```text
+europe-west1
+```
+
+The application can select the Firestore implementation with:
+
+```bash
+export WORKRELAY_STATE_STORE=firestore
+```
+
+The dedicated runtime service account is:
+
+```text
+workrelay-runtime@workrelay.iam.gserviceaccount.com
+```
+
+and has the application-required Google Cloud roles for Firestore and Vertex AI access.
+
+## 10. Configuration factories
+
+WorkRelay uses factories to keep environment-specific choices outside the core orchestration logic.
+
+### Decision provider factory
+
+```text
+WORKRELAY_DECISION_PROVIDER=local
+```
+
+or:
+
+```text
+WORKRELAY_DECISION_PROVIDER=gemini
+```
+
+### State store factory
+
+```text
+WORKRELAY_STATE_STORE=local
+```
+
+or:
+
+```text
+WORKRELAY_STATE_STORE=firestore
+```
+
+This makes it possible to develop locally while retaining a clear path to Google Cloud deployment.
+
+## 11. Google Cloud architecture
+
+The intended cloud architecture is:
+
+```text
+                    +------------------+
+                    | External / API   |
+                    | Incident Source  |
+                    +--------+---------+
+                             |
+                             v
+                    +--------+---------+
+                    |    Cloud Run     |
+                    |    WorkRelay     |
+                    +--------+---------+
+                             |
+                +------------+-------------+
+                |                          |
+                v                          v
+        +-------+--------+          +------+-------+
+        | Vertex AI /    |          |  Firestore   |
+        | Gemini 3.5     |          | Incident     |
+        | Flash          |          | State        |
+        +----------------+          +--------------+
+                |
+                |
+                v
+        +-------+--------+
+        |    Pub/Sub     |
+        | event intake / |
+        | future async   |
+        +----------------+
+```
+
+### Current cloud status
+
+Configured:
+
+- Google Cloud project `workrelay`
+- Vertex AI API
+- Firestore API
+- Pub/Sub API
+- Cloud Run API
+- Artifact Registry API
+- Cloud Build API
+- Firestore Native database
+- dedicated WorkRelay runtime service account
+
+Not yet deployed/provisioned:
+
+- WorkRelay Cloud Run service
+- Pub/Sub topics and subscriptions
+- production observability stack
+- public production endpoint
+
+The architecture document intentionally distinguishes **configured infrastructure** from **deployed infrastructure**.
+
+## 12. Security model
+
+The current design avoids embedding cloud credentials in application code.
+
+Local development uses Application Default Credentials.
+
+Cloud deployment should use the dedicated runtime service account:
+
+```text
+workrelay-runtime@workrelay.iam.gserviceaccount.com
+```
+
+with least-privilege application roles.
+
+The repository should never contain:
+
+- service-account private keys
+- access tokens
+- API secrets
+- local credential files
+- production `.env` files
+
+Before production exposure, the API should also gain authentication and authorization, along with stronger request controls and production secret management.
+
+## 13. Reliability and observability
+
+The architecture is designed to make failure states explicit.
+
+Important state transitions include:
+
+```text
+CREATED
    |
    v
-Investigation
+WORKFLOW_SELECTED
    |
    v
-Remediation
+INVESTIGATING
    |
-   +---- success ----> Verification ----> RESOLVED
+   v
+REMEDIATING
    |
-   +---- failure ----> Retry
-                           |
-                           +--> recover -> RESOLVED
-                           |
-                           +--> fail -> ESCALATED
+   v
+VERIFYING
+   |
+   +----> RESOLVED
+   |
+   +----> RETRYING
+             |
+             +----> RESOLVED
+             |
+             +----> ESCALATED
 ```
 
-## State management
+Lifecycle history provides an audit trail of state changes.
 
-The current local implementation uses `LocalStateStore` with JSON-backed persistence.
+For production deployment, the next observability improvements should include:
 
-This service boundary is intended to make future migration to Firestore possible without redesigning workflow logic.
+- structured application logs
+- Cloud Logging integration
+- metrics
+- alerting
+- correlation/request IDs
+- visibility into workflow duration, retries, failures and escalations
 
-## Cloud target
+## 14. Testing strategy
 
-When credits are available, the intended architecture is:
+WorkRelay is designed to test the decision and execution layers separately.
 
-```text
-Client
-  |
-  v
-Cloud Run
-  |
-  v
-WorkRelay Coordinator
-  |
-  +--> Gemini + ADK
-  |
-  +--> Workflow Engine
-  |
-  +--> Firestore
-  |
-  +--> Pub/Sub
-```
+Tests cover areas including:
 
-This is target architecture, not a claim that those services are currently deployed.
+- workflow selection
+- state-store operations
+- incident lifecycle
+- successful resolution
+- retry and recovery
+- escalation
+- API behavior
+- decision-provider behavior
+- Gemini provider behavior through controlled tests
 
-## Design principles
+The current local test suite contains **32 passing tests**.
 
-- Deterministic execution
-- Replaceable decision provider
-- Validated model output
-- Local-first development
-- Isolated state persistence
-- Testable components
-- No secrets in source control
+A real Gemini end-to-end test has also been successfully run locally using Gemini 3.5 Flash through Google Cloud.
+
+## 15. Design principles
+
+### Controlled autonomy
+
+The model can make a decision, but execution is constrained by application-defined workflows.
+
+### Separation of concerns
+
+The decision layer, coordinator, workflow engine, persistence layer and interfaces have separate responsibilities.
+
+### Provider independence
+
+The system can run without Gemini by using the local decision provider.
+
+### Persistence independence
+
+The system can use local state during development and Firestore when Google Cloud persistence is required.
+
+### Failure-aware execution
+
+Retries, verification and escalation are first-class workflow behavior.
+
+### Reproducibility
+
+The CLI, test suite and documented configuration provide a repeatable development and demonstration path.
+
+## 16. Future evolution
+
+The next architectural steps are:
+
+1. Deploy WorkRelay to Cloud Run.
+2. Connect the deployed service to Firestore.
+3. Introduce Pub/Sub for event-driven incident intake.
+4. Add production authentication and authorization.
+5. Add structured observability.
+6. Validate the complete workflow in Google Cloud.
+7. Add stronger operational controls around retries, idempotency and concurrent incidents.
+
+The current architecture deliberately leaves these as future deployment steps rather than presenting them as already deployed capabilities.

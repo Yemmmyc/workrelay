@@ -1,145 +1,627 @@
 # WorkRelay Development Guide
 
-## Environment
+## Overview
 
-Current development is local in WSL Ubuntu.
+This guide describes how to set up, test, run, and troubleshoot WorkRelay locally.
 
-Project:
+The project is designed so that most development and testing can be performed without Google Cloud usage. Google Cloud services are used when testing the Gemini decision provider or Firestore state persistence.
 
-```text
+## Requirements
+
+Recommended development environment:
+
+- WSL Ubuntu
+- Python 3.11+
+- Google Cloud CLI (`gcloud`) for Google Cloud features
+- Git
+- Internet access for installing Python dependencies and accessing Google Cloud services when required
+
+## Project location
+
+The current project is developed in:
+
+```bash
 ~/projects/workrelay
 ```
 
-Activate:
+Change into the project:
 
 ```bash
 cd ~/projects/workrelay
+```
+
+## Python virtual environment
+
+Create the virtual environment if it does not already exist:
+
+```bash
+python3 -m venv .venv
+```
+
+Activate it:
+
+```bash
 source .venv/bin/activate
 ```
 
-## Tests
+Verify Python:
+
+```bash
+python --version
+```
+
+The current development environment uses Python 3.11.
+
+## Install dependencies
+
+With the virtual environment active:
+
+```bash
+pip install -r requirements.txt
+```
+
+The main dependencies include:
+
+- Pydantic
+- Google ADK
+- Google Gen AI
+- Google Cloud Firestore
+- FastAPI
+- Uvicorn
+- pytest
+- HTTP client support for API tests
+
+## Environment configuration
+
+WorkRelay uses environment variables to select its decision provider and state store.
+
+The example configuration is stored in:
+
+```text
+.env.example
+```
+
+The default example is intentionally development-friendly:
+
+```text
+WORKRELAY_ENV=development
+WORKRELAY_DECISION_PROVIDER=local
+WORKRELAY_STATE_STORE=local
+```
+
+Gemini configuration is also documented there:
+
+```text
+GOOGLE_GENAI_USE_ENTERPRISE=TRUE
+GOOGLE_CLOUD_PROJECT=workrelay
+GOOGLE_CLOUD_LOCATION=global
+```
+
+The example file does not contain credentials or access tokens.
+
+## Decision providers
+
+### Local provider
+
+Use the local provider for normal development and tests:
+
+```bash
+export WORKRELAY_DECISION_PROVIDER=local
+```
+
+The local provider is deterministic and does not require Google Cloud credentials.
+
+### Gemini provider
+
+Use Gemini when testing the real AI decision layer:
+
+```bash
+export WORKRELAY_DECISION_PROVIDER=gemini
+export GOOGLE_GENAI_USE_ENTERPRISE=TRUE
+export GOOGLE_CLOUD_PROJECT=workrelay
+export GOOGLE_CLOUD_LOCATION=global
+```
+
+The Gemini provider uses Google ADK and Gemini 3.5 Flash through Google Cloud.
+
+## Google authentication
+
+For local Gemini or Firestore development, use Application Default Credentials.
+
+Authenticate:
+
+```bash
+gcloud auth application-default login   --scopes=https://www.googleapis.com/auth/cloud-platform
+```
+
+Verify:
+
+```bash
+gcloud auth application-default print-access-token
+```
+
+A successful command should return an access token.
+
+Do not save the access token in the repository.
+
+Do not create or commit a service-account private key just for local development.
+
+## State stores
+
+### Local state
+
+The local state store is the preferred option for routine development:
+
+```bash
+export WORKRELAY_STATE_STORE=local
+```
+
+It avoids cloud persistence and is appropriate for automated tests and deterministic local demonstrations.
+
+### Firestore
+
+Use Firestore when testing Google Cloud persistence:
+
+```bash
+export WORKRELAY_STATE_STORE=firestore
+```
+
+The current WorkRelay Firestore database is in:
+
+```text
+Google Cloud project: workrelay
+Location: europe-west1
+Database: (default)
+```
+
+The application uses the Firestore implementation through the `StateStore` abstraction and factory.
+
+## Recommended development modes
+
+### Lowest-cost local development
+
+```bash
+export WORKRELAY_DECISION_PROVIDER=local
+export WORKRELAY_STATE_STORE=local
+```
+
+Use this for most tests and workflow development.
+
+### Real Gemini, local state
+
+```bash
+export WORKRELAY_DECISION_PROVIDER=gemini
+export WORKRELAY_STATE_STORE=local
+export GOOGLE_GENAI_USE_ENTERPRISE=TRUE
+export GOOGLE_CLOUD_PROJECT=workrelay
+export GOOGLE_CLOUD_LOCATION=global
+```
+
+This is the preferred mode when specifically validating Gemini behavior without also requiring Firestore persistence.
+
+### Gemini + Firestore
+
+```bash
+export WORKRELAY_DECISION_PROVIDER=gemini
+export WORKRELAY_STATE_STORE=firestore
+export GOOGLE_GENAI_USE_ENTERPRISE=TRUE
+export GOOGLE_CLOUD_PROJECT=workrelay
+export GOOGLE_CLOUD_LOCATION=global
+```
+
+Use this when testing the combined cloud-backed path.
+
+## Run tests
+
+From the project root:
 
 ```bash
 pytest -q
 ```
 
-Current checkpoint:
+The current test suite contains:
 
 ```text
-25 passed
+32 tests
 ```
 
-## Syntax checks
+The expected current result is:
+
+```text
+32 passed
+```
+
+Dependency deprecation warnings may appear. They are currently warnings from third-party packages and do not represent failed WorkRelay tests.
+
+## Run the CLI
+
+The command-line runner is:
+
+```text
+run.py
+```
+
+View available options:
 
 ```bash
-python -m py_compile app/api.py app/main.py tests/test_api.py
+python run.py --help
 ```
 
-Whitespace check:
+Example local run:
 
 ```bash
-git diff --check
+export WORKRELAY_DECISION_PROVIDER=local
+export WORKRELAY_STATE_STORE=local
+
+python run.py   --title "Payment API failure"   --description "Payment requests are failing."   --service payment-api   --severity high
 ```
 
-## Run API
+Example Gemini run:
+
+```bash
+export WORKRELAY_DECISION_PROVIDER=gemini
+export WORKRELAY_STATE_STORE=local
+export GOOGLE_GENAI_USE_ENTERPRISE=TRUE
+export GOOGLE_CLOUD_PROJECT=workrelay
+export GOOGLE_CLOUD_LOCATION=global
+
+python run.py   --title "Payment API failure"   --description "Payment requests are failing."   --service payment-api   --severity high
+```
+
+## Run the FastAPI application
+
+Start the development server:
 
 ```bash
 uvicorn app.main:app --reload
 ```
 
-## Provider configuration
+The API is available at:
 
-Default:
-
-```bash
-WORKRELAY_DECISION_PROVIDER=local
+```text
+http://127.0.0.1:8000
 ```
 
-Gemini:
+Health check:
 
 ```bash
-WORKRELAY_DECISION_PROVIDER=gemini
+curl http://127.0.0.1:8000/health
 ```
 
-Invalid provider names are rejected.
+Expected:
 
-## Git workflow
+```json
+{
+  "status": "healthy",
+  "service": "workrelay"
+}
+```
+
+Create an incident:
+
+```bash
+curl -X POST http://127.0.0.1:8000/incidents   -H "Content-Type: application/json"   -d '{
+    "title": "Payment API failure",
+    "description": "Payment requests are failing.",
+    "service": "payment-api",
+    "severity": "high"
+  }'
+```
+
+List incidents:
+
+```bash
+curl http://127.0.0.1:8000/incidents
+```
+
+Retrieve an incident:
+
+```bash
+curl http://127.0.0.1:8000/incidents/<INCIDENT_ID>
+```
+
+Replace `<INCIDENT_ID>` with the ID returned by the API.
+
+## Application architecture during development
+
+The application uses factories so the main application does not need to be rewritten when changing environments.
+
+Decision provider:
+
+```text
+WORKRELAY_DECISION_PROVIDER
+          |
+          +---- local  -> LocalDecisionProvider
+          |
+          +---- gemini -> GeminiDecisionProvider
+```
+
+State store:
+
+```text
+WORKRELAY_STATE_STORE
+          |
+          +---- local     -> LocalStateStore
+          |
+          +---- firestore -> FirestoreStateStore
+```
+
+The coordinator receives these abstractions and executes the same workflow logic regardless of which implementation is selected.
+
+## Failure-path testing
+
+WorkRelay contains failure simulation options for testing retry and escalation behavior.
+
+Inspect the supported options:
+
+```bash
+python run.py --help
+```
+
+Use the built-in simulation flags rather than intentionally breaking a real service.
+
+The expected workflow pattern is:
+
+```text
+Failure
+   |
+   v
+Retry
+   |
+   +---- recovery ---> RESOLVED
+   |
+   +---- failure ---> ESCALATED
+```
+
+## Code organization
+
+The main application areas are:
+
+```text
+app/
+├── agent/
+│   ├── coordinator.py
+│   ├── decision.py
+│   ├── prompts.py
+│   └── provider_factory.py
+├── services/
+│   ├── state_store.py
+│   ├── state_store_interface.py
+│   ├── state_store_factory.py
+│   └── firestore_state_store.py
+├── workflows/
+│   ├── registry.py
+│   └── incident_workflow.py
+├── models/
+│   └── incident.py
+├── api.py
+└── main.py
+```
+
+Tests are under:
+
+```text
+tests/
+```
+
+The CLI entry point is:
+
+```text
+run.py
+```
+
+## Development workflow
+
+A recommended development cycle is:
+
+### 1. Start in local mode
+
+```bash
+export WORKRELAY_DECISION_PROVIDER=local
+export WORKRELAY_STATE_STORE=local
+```
+
+### 2. Make a small change
+
+Keep changes focused and easy to review.
+
+### 3. Run targeted tests
+
+For example:
+
+```bash
+pytest tests/test_workflow.py -q
+```
+
+or:
+
+```bash
+pytest tests/test_api.py -q
+```
+
+### 4. Run the complete suite
+
+```bash
+pytest -q
+```
+
+### 5. Check the diff
+
+```bash
+git diff --check
+```
+
+Then review:
+
+```bash
+git diff
+```
+
+### 6. Check repository status
+
+```bash
+git status
+```
+
+### 7. Commit a coherent checkpoint
+
+Use a clear commit message describing the change.
+
+## Troubleshooting
+
+### Gemini authentication problems
+
+Check:
+
+```bash
+gcloud auth application-default print-access-token
+```
+
+Then verify the configuration:
+
+```bash
+echo "$WORKRELAY_DECISION_PROVIDER"
+echo "$GOOGLE_GENAI_USE_ENTERPRISE"
+echo "$GOOGLE_CLOUD_PROJECT"
+echo "$GOOGLE_CLOUD_LOCATION"
+```
+
+For the current Gemini configuration, these should be:
+
+```text
+gemini
+TRUE
+workrelay
+global
+```
+
+### Gemini model or location errors
+
+The current configuration uses:
+
+```text
+GOOGLE_CLOUD_LOCATION=global
+```
+
+If changing the location, verify that the selected Gemini model is available through that endpoint before troubleshooting application code.
+
+### Firestore errors
+
+Verify:
+
+```bash
+echo "$WORKRELAY_STATE_STORE"
+```
+
+For Firestore testing:
+
+```text
+firestore
+```
+
+Also verify that Application Default Credentials are available.
+
+### API does not start
+
+Run:
+
+```bash
+uvicorn app.main:app --reload
+```
+
+If the port is already in use, identify the process using the port before starting another server.
+
+### Tests unexpectedly call Gemini
+
+Set:
+
+```bash
+export WORKRELAY_DECISION_PROVIDER=local
+```
+
+The automated suite should normally use controlled providers/mocks rather than repeatedly calling the live Gemini service.
+
+## Dependency warnings
+
+The current test run can display deprecation warnings from dependencies including Starlette/AnyIO, OpenTelemetry, Google ADK, and aiohttp.
+
+These are not currently test failures.
+
+Do not modify third-party packages inside `.venv` to suppress these warnings. Dependency upgrades can be evaluated separately.
+
+## Security practices
+
+Never commit:
+
+- service-account private keys
+- OAuth tokens
+- Application Default Credential files
+- production `.env` files
+- API secrets
+- passwords
 
 Before committing:
 
 ```bash
 git status
-git diff --check
+```
+
+Review sensitive changes with:
+
+```bash
+git diff
+```
+
+For Google Cloud workloads, use the dedicated WorkRelay runtime service account rather than broad default credentials where appropriate.
+
+## Cost-conscious development
+
+Because Gemini and Google Cloud resources can incur usage:
+
+- Use local decision mode for routine tests.
+- Use local state for routine development.
+- Run Gemini only when validating the real model integration.
+- Use Firestore only when validating cloud persistence.
+- Avoid repeated unnecessary end-to-end Gemini calls.
+- Keep Cloud Run at zero/minimum usage when not needed during future deployment.
+- Monitor billing and budget alerts.
+
+## Before a release or deployment
+
+Run:
+
+```bash
 pytest -q
-```
-
-Then:
-
-```bash
-git add <files>
-git commit -m "docs: update documentation"
-```
-
-Afterwards:
-
-```bash
+git diff --check
 git status
 ```
 
-The desired state is:
+Then verify:
 
-```text
-nothing to commit, working tree clean
-```
+- README reflects the actual state.
+- Documentation does not claim undeployed services are live.
+- No secrets are committed.
+- Gemini configuration is correct.
+- State-store configuration is correct.
+- Failure and retry behavior still works.
+- Git history contains a clean, understandable checkpoint.
 
-## Secrets
+## Current development status
 
-Never commit:
+At the time of this documentation update:
 
-```text
-.env
-API keys
-service-account keys
-credentials
-```
+- Local FastAPI API works.
+- CLI runner works.
+- Local decision provider works.
+- Gemini decision provider works.
+- Gemini 3.5 Flash has been successfully exercised end-to-end.
+- Local state store works.
+- Firestore state store is implemented.
+- Retry and escalation paths are implemented.
+- Lifecycle history is implemented.
+- The automated suite has 32 passing tests.
+- Google Cloud project infrastructure required for the current development path is configured.
+- Cloud Run has not yet been deployed.
+- Pub/Sub topics/subscriptions have not yet been provisioned.
 
-`.env.example` should contain only safe configuration examples.
-
-## Local-first policy
-
-Until cloud credits are available:
-
-- keep routine development local
-- use the local decision provider for ordinary tests
-- avoid unnecessary cloud resources
-- do not commit credentials
-- test cloud components only when the required access exists
-
-## Cloud migration
-
-The intended sequence is:
-
-```text
-Local implementation
-        |
-        v
-Automated tests
-        |
-        v
-Credits approved
-        |
-        v
-Google Cloud configuration
-        |
-        v
-Live Gemini validation
-        |
-        v
-Firestore / Pub/Sub
-        |
-        v
-Cloud Run deployment
-        |
-        v
-End-to-end cloud demo
-```
+This document should be updated as deployment architecture and operational practices evolve.
