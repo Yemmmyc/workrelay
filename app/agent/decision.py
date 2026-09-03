@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import inspect
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -96,6 +98,9 @@ class GeminiDecisionProvider:
             app_name=self.APP_NAME,
             user_id=self.USER_ID,
         )
+
+        if inspect.isawaitable(session):
+            session = asyncio.run(session)
 
         incident_payload = {
             "id": incident.id,

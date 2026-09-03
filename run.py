@@ -3,9 +3,9 @@ from __future__ import annotations
 import argparse
 
 from app.agent.coordinator import IncidentCoordinator
+from app.agent.provider_factory import create_decision_provider
 from app.models.incident import Incident, IncidentSeverity
-from app.services.state_store import LocalStateStore
-
+from app.services.state_store_factory import create_state_store
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -72,8 +72,12 @@ def main() -> None:
         metadata=metadata,
     )
 
-    store = LocalStateStore()
-    coordinator = IncidentCoordinator(store)
+    store = create_state_store()
+    decision_provider = create_decision_provider()
+    coordinator = IncidentCoordinator(
+        store,
+        decision_provider=decision_provider,
+    )
 
     result = coordinator.handle(incident)
 
