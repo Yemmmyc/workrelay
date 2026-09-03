@@ -7,7 +7,7 @@ from app.actions.incident_actions import (
 )
 from app.actions.notification_actions import record_escalation
 from app.models.incident import Incident, IncidentStatus
-from app.services.state_store import LocalStateStore
+from app.services.state_store_interface import StateStore
 from app.workflows.registry import (
     WorkflowDefinition,
     get_workflow,
@@ -24,7 +24,7 @@ class IncidentWorkflow:
     but execution remains controlled here.
     """
 
-    def __init__(self, state_store: LocalStateStore) -> None:
+    def __init__(self, state_store: StateStore) -> None:
         self.state_store = state_store
 
     def _save(self, incident: Incident) -> None:

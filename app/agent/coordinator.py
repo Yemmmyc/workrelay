@@ -5,7 +5,7 @@ from app.agent.decision import (
     LocalDecisionProvider,
 )
 from app.models.incident import Incident
-from app.services.state_store import LocalStateStore
+from app.services.state_store_interface import StateStore
 from app.workflows.incident_workflow import IncidentWorkflow
 
 
@@ -25,7 +25,7 @@ class IncidentCoordinator:
 
     def __init__(
         self,
-        state_store: LocalStateStore,
+        state_store: StateStore,
         decision_provider: DecisionProvider | None = None,
     ) -> None:
         self.state_store = state_store
