@@ -42,6 +42,17 @@ class IncidentAction(BaseModel):
     completed_at: datetime | None = None
 
 
+class IncidentEvent(BaseModel):
+    """A timestamped record of an incident lifecycle event."""
+
+    event: str
+    status: IncidentStatus
+    step: str
+    timestamp: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc)
+    )
+    details: dict[str, Any] = Field(default_factory=dict)
+
 class Incident(BaseModel):
     id: str = Field(default_factory=lambda: f"INC-{uuid4().hex[:8].upper()}")
     title: str
@@ -54,6 +65,7 @@ class Incident(BaseModel):
     workflow: str | None = None
 
     actions: list[IncidentAction] = Field(default_factory=list)
+    history: list[IncidentEvent] = Field(default_factory=list)
 
     resolution: str | None = None
     escalation_reason: str | None = None
@@ -71,3 +83,21 @@ class Incident(BaseModel):
     def touch(self) -> None:
         """Update the incident modification timestamp."""
         self.updated_at = datetime.now(timezone.utc)
+
+    def record_event(
+        self,
+        event: str,
+        *,
+        step: str | None = None,
+        details: dict[str, Any] | None = None,
+    ) -> None:
+        """Append an observable lifecycle event to the incident history."""
+        self.history.append(
+            IncidentEvent(
+                event=event,
+                status=self.status,
+                step=step or self.current_step,
+                details=details or {},
+            )
+        )
+        self.touch()

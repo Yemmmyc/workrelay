@@ -38,6 +38,10 @@ class IncidentWorkflow:
     ) -> None:
         incident.status = status
         incident.current_step = step
+        incident.record_event(
+            step.upper(),
+            step=step,
+        )
         self._save(incident)
 
     def start(
@@ -150,6 +154,15 @@ class IncidentWorkflow:
                 }
             )
 
+            incident.record_event(
+                "RETRY_SCHEDULED",
+                step=f"retry_{incident.retry_count}_scheduled",
+                details={
+                    "attempt": incident.retry_count,
+                    "reason": reason,
+                },
+            )
+
             self._save(incident)
 
             return self._retry(incident)
@@ -222,6 +235,13 @@ class IncidentWorkflow:
         incident: Incident,
         reason: str,
     ) -> Incident:
+        incident.record_event(
+            "ESCALATION_TRIGGERED",
+           step="escalation_triggered",
+           details={"reason": reason},
+
+        )
+
         record_escalation(incident, reason)
 
         self._transition(

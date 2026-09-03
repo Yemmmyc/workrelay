@@ -44,6 +44,16 @@ class IncidentCoordinator:
         decision = self.decision_provider.decide(incident)
 
         incident.workflow = decision.workflow.name
+        incident.record_event(
+            "WORKFLOW_SELECTED",
+            step="workflow_selected",
+            details={
+                "workflow": decision.workflow.name,
+                "decision_provider": self.decision_provider.__class__.__name__,
+                "reasoning": decision.reasoning,
+            },
+        )
+
         incident.metadata["coordination"] = {
             "reasoning": decision.reasoning,
             "decision_provider": self.decision_provider.__class__.__name__,

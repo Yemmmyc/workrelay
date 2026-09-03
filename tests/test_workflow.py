@@ -149,6 +149,9 @@ def test_critical_incident_escalates_without_retry(tmp_path):
     assert result.status == IncidentStatus.ESCALATED
     assert result.retry_count == 0
     assert result.escalation_reason is not None
+    events = [event.event for event in result.history]
+
+    assert "ESCALATION_TRIGGERED" in events
 
 def test_workflow_retries_and_recovers(tmp_path):
     store = LocalStateStore(tmp_path / "incidents.json")
@@ -170,6 +173,11 @@ def test_workflow_retries_and_recovers(tmp_path):
     assert result.retry_count == 1
     assert result.current_step == "incident_resolved_after_retry"
     assert len(result.metadata["retries"]) == 1
+    events = [event.event for event in result.history]
+
+    assert "RETRY_SCHEDULED" in events
+
+
 
 def test_workflow_persists_final_state(tmp_path):
     store = LocalStateStore(tmp_path / "incidents.json")
