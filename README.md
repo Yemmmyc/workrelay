@@ -22,7 +22,10 @@ WorkRelay is an automated operational incident coordination system built around 
 - Dedicated WorkRelay runtime service account: configured
 - Automated tests: **32 passed**
 - Real end-to-end Gemini test: **successful**
-- Cloud Run deployment: **not yet deployed**
+- Cloud Run deployment: **deployed and verified**
+- Cloud Run service: **private, scale-to-zero, max 1 instance**
+- Artifact Registry image: **built and pushed**
+- Firestore production persistence: **verified**
 - Pub/Sub: **not yet provisioned**
 
 ## What WorkRelay does
@@ -242,14 +245,25 @@ Configured components include:
 - Firestore Native database
 - Dedicated WorkRelay runtime service account
 
-### Not yet deployed
+### Current deployment state
 
-The following are intentionally not described as deployed:
+#### Deployed and verified
 
-- Cloud Run service
-- Pub/Sub topics/subscriptions
-- Production observability
-- Public production endpoint
+- WorkRelay Cloud Run service
+- Gemini 3.5 Flash through Google ADK
+- Firestore incident persistence
+- Artifact Registry container image
+- Dedicated WorkRelay runtime service account
+- Private Cloud Run access
+- Cloud Run health endpoint
+- End-to-end incident execution
+
+#### Not yet deployed/provisioned
+
+- Pub/Sub event-driven intake
+- Production-grade observability and alerting
+- Public endpoint
+- Production authentication/authorization layer
 
 This README reflects the actual current state rather than treating planned architecture as deployed infrastructure.
 

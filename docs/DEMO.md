@@ -483,43 +483,37 @@ Never capture:
 
 ## 12. Current deployment status
 
-The demo must distinguish between **working locally**, **configured in Google Cloud**, and **deployed**.
-
 ### Working locally
 
 - FastAPI API
 - CLI runner
 - Local decision provider
 - Gemini decision provider
-- deterministic workflows
-- retry/recovery
-- escalation
-- lifecycle history
-- local state store
+- Deterministic workflows
+- Retry/recovery
+- Escalation
+- Lifecycle history
+- Local state store
 - Firestore state store
-- automated tests
+- Automated tests
 
-### Configured in Google Cloud
+### Deployed and verified on Google Cloud
 
-- WorkRelay project
-- Vertex AI API
-- Firestore API
-- Pub/Sub API
-- Cloud Run API
-- Artifact Registry API
-- Cloud Build API
-- Firestore Native database
-- dedicated WorkRelay runtime service account
+- Cloud Run WorkRelay service
+- Gemini 3.5 Flash through Google ADK
+- Firestore persistence
+- Artifact Registry container image
+- Dedicated WorkRelay runtime service account
+- Private Cloud Run access
+- End-to-end incident workflow
+- Health endpoint
 
-### Not currently deployed
+### Configured but not yet deployed
 
-- WorkRelay Cloud Run service
-- Pub/Sub topics/subscriptions
-- public production endpoint
-- production observability configuration
-
-Do not describe these future components as live infrastructure until they have actually been deployed and verified.
-
+- Pub/Sub event-driven intake
+- Production observability/alerting
+- Public endpoint
+- Production authentication and authorization
 ---
 
 ## 13. Demo safety and cost control

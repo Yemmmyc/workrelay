@@ -375,26 +375,26 @@ The intended cloud architecture is:
 
 ### Current cloud status
 
-Configured:
+#### Deployed and verified
 
 - Google Cloud project `workrelay`
-- Vertex AI API
-- Firestore API
-- Pub/Sub API
-- Cloud Run API
-- Artifact Registry API
-- Cloud Build API
+- Cloud Run service `workrelay`
+- Artifact Registry repository and WorkRelay container image
+- Gemini 3.5 Flash through Google ADK / Vertex AI
 - Firestore Native database
-- dedicated WorkRelay runtime service account
+- Dedicated WorkRelay runtime service account
+- Private Cloud Run service
+- Cloud Run scale-to-zero configuration
+- End-to-end Cloud Run → Gemini → Firestore incident workflow
 
-Not yet deployed/provisioned:
+#### Configured but not yet deployed/provisioned
 
-- WorkRelay Cloud Run service
 - Pub/Sub topics and subscriptions
-- production observability stack
-- public production endpoint
+- Production observability stack
+- Public production endpoint
+- Production authentication and authorization
 
-The architecture document intentionally distinguishes **configured infrastructure** from **deployed infrastructure**.
+The architecture intentionally distinguishes **deployed infrastructure** from **configured or future infrastructure**.
 
 ## 12. Security model
 
@@ -402,7 +402,7 @@ The current design avoids embedding cloud credentials in application code.
 
 Local development uses Application Default Credentials.
 
-Cloud deployment should use the dedicated runtime service account:
+Cloud deployment uses the dedicated runtime service account:
 
 ```text
 workrelay-runtime@workrelay.iam.gserviceaccount.com
