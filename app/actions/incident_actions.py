@@ -15,9 +15,11 @@ def investigate_incident(incident: Incident) -> ActionResult:
     """
     Perform a deterministic local investigation.
 
-    In the production version, this will be replaced or augmented with
+    The current deployed version uses deterministic simulation.
+    The action boundary is designed to be replaced or augmented with
     real operational signals such as logs, metrics, traces, or service
     health checks.
+
     """
 
     incident.metadata["investigation"] = {

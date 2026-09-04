@@ -16,11 +16,10 @@ class IncidentCoordinator:
     The coordinator is the boundary between decision-making and the
     deterministic workflow engine.
 
-    Today:
-        LocalDecisionProvider
+    Decision providers:
+        LocalDecisionProvider for deterministic local execution.
+        GeminiDecisionProvider for Gemini + Google ADK coordination.
 
-    Later:
-        Gemini + Google ADK decision provider
     """
 
     def __init__(
