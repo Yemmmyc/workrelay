@@ -106,3 +106,19 @@ def test_create_app_with_local_provider(monkeypatch):
         incident["metadata"]["coordination"]["decision_provider"]
         == "LocalDecisionProvider"
     )
+
+def test_operations_console():
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert "<title>WorkRelay — Incident Command Center</title>" in response.text
+    assert "Create Incident" in response.text
+
+
+def test_operations_console_static_css():
+    response = client.get("/static/style.css")
+
+    assert response.status_code == 200
+    assert ":root" in response.text
+    assert "--bg:" in response.text
+    assert "--panel:" in response.text

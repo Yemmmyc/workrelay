@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WorkRelay — Incident Command Center</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+
+<body>
+
+<header class="topbar">
+    <div>
+        <h1>WorkRelay</h1>
+        <p>Agentic Incident Command Center</p>
+    </div>
+
+    <div id="health" class="health">
+        Checking system...
+    </div>
+</header>
+
+<main class="container">
+
+    <section class="hero">
+        <div>
+            <span class="eyebrow">AUTONOMOUS OPERATIONS</span>
+            <h2>Incident Command Center</h2>
+            <p>
+                WorkRelay uses Gemini-powered decision coordination and
+                deterministic workflows to investigate, remediate, verify,
+                and resolve operational incidents.
+            </p>
+        </div>
+    </section>
+
+    <!-- SUMMARY -->
+    <section class="stats">
+
+        <div class="stat-card">
+            <span>Total Incidents</span>
+            <strong id="total-count">0</strong>
+        </div>
+
+        <div class="stat-card">
+            <span>Active</span>
+            <strong id="active-count">0</strong>
+        </div>
+
+        <div class="stat-card">
+            <span>Resolved</span>
+            <strong id="resolved-count">0</strong>
+        </div>
+
+        <div class="stat-card">
+            <span>Escalated</span>
+            <strong id="escalated-count">0</strong>
+        </div>
+
+    </section>
+
+    <!-- CREATE INCIDENT -->
+    <section class="panel">
+
+        <div class="section-title">
+            <div>
+                <span class="eyebrow">INCIDENT INTAKE</span>
+                <h2>Create Incident</h2>
+            </div>
+        </div>
+
+        <form id="incident-form">
+
+            <div class="grid">
+
+                <label>
+                    Title
+                    <input
+                        id="title"
+                        required
+                        placeholder="Payment API failure">
+                </label>
+
+                <label>
+                    Service
+                    <input
+                        id="service"
+                        required
+                        placeholder="payment-api">
+                </label>
+
+                <label>
+                    Severity
+                    <select id="severity">
+                        <option value="LOW">LOW</option>
+                        <option value="MEDIUM" selected>MEDIUM</option>
+                        <option value="HIGH">HIGH</option>
+                        <option value="CRITICAL">CRITICAL</option>
+                    </select>
+                </label>
+
+            </div>
+
+            <label>
+                Description
+                <textarea
+                    id="description"
+                    required
+                    placeholder="Describe the operational incident..."></textarea>
+            </label>
+
+            <button type="submit">
+                Create & Coordinate Incident
+            </button>
+
+        </form>
+
+        <div id="result" class="result hidden"></div>
+
+    </section>
+
+    <!-- RECENT INCIDENTS -->
+    <section class="panel">
+
+        <div class="section-header">
+
+            <div>
+                <span class="eyebrow">OPERATIONS</span>
+                <h2>Recent Incidents</h2>
+                <p class="muted">
+                    Showing the five most recent incidents.
+                </p>
+            </div>
+
+            <button id="refresh" class="secondary">
+                Refresh
+            </button>
+
+        </div>
+
+        <div id="incidents">
+            <p class="muted">Loading incidents...</p>
+        </div>
+
+    </section>
+
+</main>
+
+<!-- INCIDENT DETAILS MODAL -->
+<div id="modal" class="modal hidden">
+
+    <div class="modal-content">
+
+        <div class="modal-header">
+            <div>
+                <span class="eyebrow">INCIDENT DETAILS</span>
+                <h2 id="modal-title">Incident</h2>
+                <small id="modal-id"></small>
+            </div>
+
+            <button id="close-modal" class="close">
+                ×
+            </button>
+        </div>
+
+        <div id="modal-body"></div>
+
+    </div>
+
+</div>
+
+<script>
+
+const form = document.getElementById("incident-form");
+const result = document.getElementById("result");
+const incidents = document.getElementById("incidents");
+const health = document.getElementById("health");
+
+const modal = document.getElementById("modal");
+const modalTitle = document.getElementById("modal-title");
+const modalId = document.getElementById("modal-id");
+const modalBody = document.getElementById("modal-body");
+
+let incidentCache = [];
+
+function escapeHtml(value) {
+    const div = document.createElement("div");
+    div.textContent = value ?? "";
+    return div.innerHTML;
+}
+
+async function checkHealth() {
+
+    try {
+
+        const response = await fetch("/health");
+        const data = await response.json();
+
+        if (response.ok && data.status === "healthy") {
+
+            health.textContent = "● SYSTEM HEALTHY";
+            health.className = "health healthy";
+
+        } else {
+
+            throw new Error();
+
+        }
+
+    } catch {
+
+        health.textContent = "● SYSTEM UNAVAILABLE";
+        health.className = "health unhealthy";
+
+    }
+}
+
+function updateStats(data) {
+
+    const total = data.length;
+
+    const resolved = data.filter(
+        i => String(i.status).toUpperCase() === "RESOLVED"
+    ).length;
+
+    const escalated = data.filter(
+        i => String(i.status).toUpperCase() === "ESCALATED"
+    ).length;
+
+    const active = total - resolved - escalated;
+
+    document.getElementById("total-count").textContent = total;
+    document.getElementById("active-count").textContent = active;
+    document.getElementById("resolved-count").textContent = resolved;
+    document.getElementById("escalated-count").textContent = escalated;
+}
+
+function getCoordination(incident) {
+
+    return incident.metadata?.coordination || {};
+
+}
+
+function incidentCard(incident) {
+
+    const coordination = getCoordination(incident);
+
+    return `
+        <article class="incident-card">
+
+            <div class="incident-heading">
+
+                <div>
+                    <h3>${escapeHtml(incident.title)}</h3>
+                    <small>${escapeHtml(incident.id)}</small>
+                </div>
+
+                <div class="badges">
+
+                    <span class="badge severity-${String(
+                        incident.severity
+                    ).toLowerCase()}">
+                        ${escapeHtml(incident.severity)}
+                    </span>
+
+                    <span class="badge status-${String(
+                        incident.status
+                    ).toLowerCase()}">
+                        ${escapeHtml(incident.status)}
+                    </span>
+
+                </div>
+
+            </div>
+
+            <div class="details">
+
+                <div>
+                    <span>Service</span>
+                    <strong>${escapeHtml(incident.service)}</strong>
+                </div>
+
+                <div>
+                    <span>Workflow</span>
+                    <strong>${escapeHtml(
+                        incident.workflow || "—"
+                    )}</strong>
+                </div>
+
+                <div>
+                    <span>Decision Provider</span>
+                    <strong>${escapeHtml(
+                        coordination.decision_provider || "—"
+                    )}</strong>
+                </div>
+
+                <div>
+                    <span>Retries</span>
+                    <strong>${incident.retry_count ?? 0}</strong>
+                </div>
+
+            </div>
+
+            <div class="card-footer">
+
+                <span class="muted">
+                    ${escapeHtml(
+                        incident.current_step || "No current step"
+                    )}
+                </span>
+
+                <button
+                    class="secondary view-button"
+                    onclick="showIncident('${escapeHtml(incident.id)}')">
+                    View Details
+                </button>
+
+            </div>
+
+        </article>
+    `;
+}
+
+async function loadIncidents() {
+
+    try {
+
+        const response = await fetch("/incidents");
+
+        if (!response.ok) {
+            throw new Error("Unable to load incidents.");
+        }
+
+        const data = await response.json();
+
+        incidentCache = data;
+
+        updateStats(data);
+
+        if (!data.length) {
+
+            incidents.innerHTML =
+                '<p class="muted">No incidents yet.</p>';
+
+            return;
+        }
+
+        const recent = data
+            .slice()
+            .reverse()
+            .slice(0, 5);
+
+        incidents.innerHTML = recent
+            .map(incidentCard)
+            .join("");
+
+    } catch (error) {
+
+        incidents.innerHTML =
+            `<p class="error">${escapeHtml(error.message)}</p>`;
+
+    }
+}
+
+function showIncident(id) {
+
+    const incident = incidentCache.find(
+        item => item.id === id
+    );
+
+    if (!incident) {
+        return;
+    }
+
+    const coordination = getCoordination(incident);
+
+    modalTitle.textContent = incident.title;
+    modalId.textContent = incident.id;
+
+    const history = (incident.history || [])
+        .map(event => `
+            <div class="timeline-item">
+
+                <span>✓</span>
+
+                <div>
+                    <strong>
+                        ${escapeHtml(
+                            event.event_type || event.event
+                        )}
+                    </strong>
+
+                    <small>
+                        ${escapeHtml(event.timestamp || "")}
+                    </small>
+                </div>
+
+            </div>
+        `)
+        .join("");
+
+    modalBody.innerHTML = `
+
+        <div class="modal-grid">
+
+            <div>
+                <span>Service</span>
+                <strong>${escapeHtml(
+                    incident.service
+                )}</strong>
+            </div>
+
+            <div>
+                <span>Severity</span>
+                <strong>${escapeHtml(
+                    incident.severity
+                )}</strong>
+            </div>
+
+            <div>
+                <span>Status</span>
+                <strong>${escapeHtml(
+                    incident.status
+                )}</strong>
+            </div>
+
+            <div>
+                <span>Workflow</span>
+                <strong>${escapeHtml(
+                    incident.workflow || "—"
+                )}</strong>
+            </div>
+
+            <div>
+                <span>Decision Provider</span>
+                <strong>${escapeHtml(
+                    coordination.decision_provider || "—"
+                )}</strong>
+            </div>
+
+            <div>
+                <span>Retries</span>
+                <strong>${incident.retry_count ?? 0}</strong>
+            </div>
+
+        </div>
+
+        <div class="reasoning">
+
+            <strong>Gemini / Coordination Reasoning</strong>
+
+            <p>
+                ${escapeHtml(
+                    coordination.reasoning ||
+                    "No coordination reasoning recorded."
+                )}
+            </p>
+
+        </div>
+
+        <div class="timeline">
+
+            <h3>Incident Timeline</h3>
+
+            ${
+                history ||
+                '<p class="muted">No lifecycle events.</p>'
+            }
+
+        </div>
+
+        <div class="resolution">
+
+            <strong>Resolution</strong>
+
+            <p>
+                ${escapeHtml(
+                    incident.resolution ||
+                    "No resolution recorded."
+                )}
+            </p>
+
+        </div>
+    `;
+
+    modal.classList.remove("hidden");
+}
+
+function closeModal() {
+
+    modal.classList.add("hidden");
+
+}
+
+document
+    .getElementById("close-modal")
+    .addEventListener("click", closeModal);
+
+modal.addEventListener("click", event => {
+
+    if (event.target === modal) {
+        closeModal();
+    }
+
+});
+
+form.addEventListener("submit", async event => {
+
+    event.preventDefault();
+
+    result.className = "result";
+    result.textContent =
+        "WorkRelay is coordinating the incident...";
+
+    const payload = {
+
+        title: document.getElementById("title").value,
+        description: document.getElementById("description").value,
+        service: document.getElementById("service").value,
+        severity: document.getElementById("severity").value,
+        metadata: {}
+
+    };
+
+    try {
+
+        const response = await fetch("/incidents", {
+
+            method: "POST",
+
+            headers: {
+                "Content-Type": "application/json"
+            },
+
+            body: JSON.stringify(payload)
+
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+
+            throw new Error(
+                data.detail || "Incident creation failed."
+            );
+
+        }
+
+        result.className = "result success";
+
+        result.innerHTML = `
+            <strong>Incident coordinated successfully.</strong>
+            <p>
+                ${escapeHtml(data.incident.id)}
+                · ${escapeHtml(data.incident.status)}
+                · ${escapeHtml(data.incident.workflow)}
+            </p>
+        `;
+
+        form.reset();
+
+        document.getElementById("severity").value = "MEDIUM";
+
+        await loadIncidents();
+
+    } catch (error) {
+
+        result.className = "result error";
+        result.textContent = error.message;
+
+    }
+
+});
+
+document
+    .getElementById("refresh")
+    .addEventListener("click", async () => {
+
+        await checkHealth();
+        await loadIncidents();
+
+    });
+
+checkHealth();
+loadIncidents();
+
+</script>
+
+</body>
+</html>

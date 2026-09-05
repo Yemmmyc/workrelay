@@ -68,6 +68,7 @@ The main dependencies include:
 - Google Cloud Firestore
 - FastAPI
 - Uvicorn
+- Jinja2 for the browser Operations Console
 - pytest
 - HTTP client support for API tests
 
@@ -219,16 +220,12 @@ From the project root:
 pytest -q
 ```
 
-The current test suite contains:
+The current test suite contains 34 tests, including Operations Console checks.
+
+The latest verified result is:
 
 ```text
-32 tests
-```
-
-The expected current result is:
-
-```text
-32 passed
+34 passed
 ```
 
 Dependency deprecation warnings may appear. They are currently warnings from third-party packages and do not represent failed WorkRelay tests.
@@ -322,6 +319,46 @@ curl http://127.0.0.1:8000/incidents/<INCIDENT_ID>
 
 Replace `<INCIDENT_ID>` with the ID returned by the API.
 
+## Browser Operations Console
+
+The FastAPI application also serves the WorkRelay Operations Console. The UI is implemented with a Jinja2 HTML template and static CSS/JavaScript assets.
+
+Project files:
+
+```text
+app/templates/index.html
+app/static/style.css
+```
+
+Start the local console:
+
+```bash
+export WORKRELAY_DECISION_PROVIDER=local
+export WORKRELAY_STATE_STORE=local
+
+uvicorn app.main:app --reload --port 8000
+```
+
+Open:
+
+```text
+http://127.0.0.1:8000/
+```
+
+The console calls the existing API endpoints rather than duplicating incident-processing logic. Incident creation therefore follows the same coordinator and workflow path as CLI and API clients.
+
+For a real Gemini + Firestore UI test:
+
+```bash
+export WORKRELAY_DECISION_PROVIDER=gemini
+export WORKRELAY_STATE_STORE=firestore
+export GOOGLE_GENAI_USE_ENTERPRISE=TRUE
+export GOOGLE_CLOUD_PROJECT=workrelay
+export GOOGLE_CLOUD_LOCATION=global
+```
+
+The UI tests are included in `tests/test_api.py` and verify that the console and static CSS are served correctly.
+
 ## Application architecture during development
 
 The application uses factories so the main application does not need to be rewritten when changing environments.
@@ -394,6 +431,10 @@ app/
 │   └── incident_workflow.py
 ├── models/
 │   └── incident.py
+├── templates/
+│   └── index.html
+├── static/
+│   └── style.css
 ├── api.py
 └── main.py
 ```
@@ -619,9 +660,11 @@ At the time of this documentation update:
 - Firestore state store is implemented.
 - Retry and escalation paths are implemented.
 - Lifecycle history is implemented.
-- The automated suite has 32 passing tests.
+- The automated suite has 34 passing tests.
+- The browser Operations Console is implemented and locally verified.
 - Google Cloud project infrastructure required for the current development path is configured.
-- Cloud Run has not yet been deployed.
+- Cloud Run is deployed and the backend Gemini + Firestore path has been verified.
+- The next deployment will include the Operations Console.
 - Pub/Sub topics/subscriptions have not yet been provisioned.
 
 This document should be updated as deployment architecture and operational practices evolve.

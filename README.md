@@ -3,6 +3,8 @@
 **WorkRelay is an agentic operational incident coordination system that uses Gemini 3.5 Flash and Google ADK to select an appropriate incident-response workflow, while keeping operational execution deterministic, controlled, testable, and auditable.**
 
 > **Current deployment:** WorkRelay is deployed privately on Google Cloud Run, using Gemini 3.5 Flash through Google ADK for workflow selection and Firestore for persistent incident state.
+>
+> **Web console:** WorkRelay also includes a browser-based Operations Console for incident intake, status monitoring, recent-incident review, and detailed lifecycle inspection. The new web UI has been verified locally; the Cloud Run deployment still needs to be rebuilt and redeployed with the UI changes.
 
 ## What WorkRelay does
 
@@ -11,46 +13,44 @@ WorkRelay receives an operational incident and coordinates its response through 
 The system separates **AI decision-making** from **operational execution**:
 
 ```text
-Incident
-   |
-   v
-FastAPI / CLI
-   |
-   v
-IncidentCoordinator
-   |
-   v
-Decision Provider
-   |-------------------------|
-   |                         |
-   v                         v
-Local Provider          Gemini + ADK
-   |                         |
-   +------------+------------+
-                |
-                v
-        Workflow Registry
-                |
-                v
-      Deterministic Workflow
-                |
-        +-------+-------+
-        |               |
-        v               v
- Investigation       Remediation
-        |               |
-        +-------+-------+
-                |
-                v
-           Verification
-                |
-          +-----+-----+
-          |           |
-          v           v
-       RESOLVED    ESCALATED
-                |
-                v
-             Firestore
+                    Browser
+                       |
+                       v
+          WorkRelay Operations Console
+                       |
+                       v
+                 FastAPI / CLI
+                       |
+                       v
+              IncidentCoordinator
+                       |
+                       v
+                Decision Provider
+                  |             |
+                  v             v
+            Local Provider   Gemini + ADK
+                  |             |
+                  +------+------+
+                         |
+                         v
+                  Workflow Registry
+                         |
+                         v
+              Deterministic Workflow
+                  |             |
+                  v             v
+            Investigation   Remediation
+                  |             |
+                  +------+------+
+                         |
+                         v
+                    Verification
+                    |          |
+                    v          v
+                 RESOLVED   ESCALATED
+                         |
+                         v
+                      Firestore
 ```
 
 ### Key design principle
@@ -60,6 +60,104 @@ Local Provider          Gemini + ADK
 Gemini does not directly execute arbitrary remediation commands. The application validates the selected workflow against the registered workflow definitions and then executes controlled workflow steps.
 
 This separation makes WorkRelay easier to test, reason about, secure, and extend.
+
+---
+
+## Web Operations Console
+
+WorkRelay now includes a browser-based **Operations Console** built on top of the existing FastAPI application.
+
+The console provides an operator-friendly interface for interacting with the incident coordination system without requiring direct API or CLI commands.
+
+### Current UI capabilities
+
+- System health indicator
+- Browser-based incident intake
+- Incident title, service, severity, and description fields
+- Incident creation and coordination
+- Dashboard summary statistics:
+  - Total incidents
+  - Active incidents
+  - Resolved incidents
+  - Escalated incidents
+- Five most recent incidents on the main dashboard
+- Incident status, severity, workflow, provider, and retry information
+- Incident detail view
+- Gemini coordination reasoning
+- Full incident lifecycle timeline
+- Resolution information
+- Responsive layout for smaller screens
+
+### UI architecture
+
+```text
+Browser
+   |
+   v
+GET /
+   |
+   v
+WorkRelay Operations Console
+   |
+   +----------------------+
+   |                      |
+   v                      v
+GET /health          POST /incidents
+   |                      |
+   |                      v
+   |               IncidentCoordinator
+   |                      |
+   |                      v
+   |               Gemini / Local Provider
+   |                      |
+   |                      v
+   |               Workflow Execution
+   |                      |
+   |                      v
+   +----------------> Firestore
+```
+
+### Run the web console locally
+
+After installing dependencies:
+
+```bash
+uvicorn app.main:app --reload --port 8000
+```
+
+Open:
+
+```text
+http://127.0.0.1:8000
+```
+
+The console uses the same backend as the API and CLI, so incidents created from the browser follow the same coordination and workflow logic.
+
+### Example browser execution
+
+A real local browser submission was completed with:
+
+```text
+Incident ID : INC-513D1311
+Severity    : HIGH
+Workflow    : high_severity_incident
+Status      : RESOLVED
+Provider    : GeminiDecisionProvider
+Retries     : 0
+```
+
+The incident also displayed Gemini coordination reasoning and the complete lifecycle:
+
+```text
+WORKFLOW_SELECTED
+INCIDENT_CLASSIFIED
+INVESTIGATION_STARTED
+REMEDIATION_STARTED
+VERIFICATION_STARTED
+INCIDENT_RESOLVED
+```
+
+This demonstrates that the web console is connected to the real WorkRelay coordination path rather than being a static mockup.
 
 ---
 
@@ -73,6 +171,10 @@ This separation makes WorkRelay easier to test, reason about, secure, and extend
 - Incident lifecycle history is recorded.
 - Local JSON-backed state is supported.
 - Firestore persistence is implemented and verified.
+- The browser-based Operations Console is implemented.
+- Browser incident creation and coordination have been verified locally.
+- The UI displays Gemini decision-provider information and coordination reasoning.
+- The UI displays incident lifecycle history and resolution details.
 - The application is deployed to Google Cloud Run.
 - Cloud Run uses a dedicated runtime service account.
 - The Cloud Run service is private.
@@ -81,7 +183,7 @@ This separation makes WorkRelay easier to test, reason about, secure, and extend
 - The deployed container is referenced by an immutable image digest.
 - The deployed Gemini workflow has been tested end-to-end.
 - The resulting incident has been independently verified in Firestore.
-- Automated test suite: **32 passed**.
+- Automated test suite: **32 passed** before the web-console changes; the final UI-inclusive suite must be rerun before the next release commit.
 
 ---
 
@@ -102,9 +204,14 @@ This separation makes WorkRelay easier to test, reason about, secure, and extend
 | Escalation | ✅ Implemented and tested |
 | Incident lifecycle history | ✅ Implemented |
 | Firestore state store | ✅ Implemented and verified |
-| Automated tests | ✅ **32 passed** |
-| Artifact Registry | ✅ Image built and pushed |
-| Cloud Run | ✅ Deployed and verified |
+| Operations Console | ✅ Implemented and locally verified |
+| Browser incident intake | ✅ Verified |
+| Dashboard statistics | ✅ Implemented |
+| Incident detail/timeline | ✅ Implemented |
+| Automated tests | ⚠️ 32 passed before latest UI changes; final suite pending |
+| Artifact Registry | ✅ Image previously built and pushed |
+| Cloud Run backend | ✅ Deployed and verified |
+| Cloud Run UI deployment | ⏳ New UI image still needs deployment |
 | Cloud Run access | 🔒 Private |
 | Cloud Run scaling | ✅ Scale-to-zero, max 1 instance |
 | Pub/Sub | ⏳ Not yet provisioned |
@@ -168,12 +275,12 @@ VERIFYING
 RESOLVED             FAILURE
                         |
                         v
-                    RETRY?
-                    /    \
-                  YES     NO
-                   |       |
-                   v       v
-                 RETRY   ESCALATED
+                     RETRY?
+                    /      \
+                  YES       NO
+                   |         |
+                   v         v
+                 RETRY    ESCALATED
                    |
                    v
               VERIFICATION
@@ -281,7 +388,7 @@ WorkRelay is currently deployed as a private Cloud Run service.
 
 ### Cloud Run configuration
 
-The current deployment uses:
+The current backend deployment uses:
 
 ```text
 CPU              : 1
@@ -299,25 +406,25 @@ This protects the current development deployment from unauthenticated external r
 
 ### Deployment verification
 
-The deployed revision was verified as:
+The previously verified backend revision was:
 
 ```text
 workrelay-00001-4xg
 ```
 
-The revision uses the Artifact Registry image by immutable digest:
+The revision used the Artifact Registry image by immutable digest:
 
 ```text
 sha256:bb2f302543c528f573edbc16ea4ae9aef2bb430bf5d81a9d2b2be3ef6e73404b
 ```
 
-Cloud Run reported the revision as ready and healthy.
+The **web-console changes are not yet represented by this deployed image**. A new container build and Cloud Run revision are required before claiming the browser UI is deployed to Cloud Run.
 
 ---
 
 ## End-to-end cloud verification
 
-A real incident was submitted through the deployed Cloud Run service using Gemini.
+A real incident was previously submitted through the deployed Cloud Run service using Gemini.
 
 Example result:
 
@@ -356,7 +463,7 @@ INCIDENT_RESOLVED
 
 The resulting incident was independently verified in Firestore after the Cloud Run execution.
 
-This demonstrates the complete path:
+This demonstrates the previously verified cloud backend path:
 
 ```text
 Client
@@ -379,6 +486,8 @@ Deterministic execution
   v
 Firestore persistence
 ```
+
+The next deployment verification will extend this path to include the browser Operations Console.
 
 ---
 
@@ -421,13 +530,13 @@ Run:
 pytest -q
 ```
 
-Expected result:
+The previously completed suite produced:
 
 ```text
 32 passed
 ```
 
-The current suite covers:
+The suite covers:
 
 - workflow selection
 - state-store behavior
@@ -441,17 +550,61 @@ The current suite covers:
 - Firestore state-store behavior
 - Gemini decision validation
 
-The current test run also produces a small number of dependency deprecation warnings. These originate from dependencies such as Starlette, OpenTelemetry, and Google ADK and do not represent failing WorkRelay tests.
+The test run also produces a small number of dependency deprecation warnings. These originate from dependencies such as Starlette, OpenTelemetry, and Google ADK and do not represent failing WorkRelay tests.
+
+**Before the next release commit, rerun the full suite after the web-console changes and update the documented count if the test total changes.**
+
+---
+
+## Run the web application locally
+
+The browser Operations Console is served by FastAPI.
+
+Start the application:
+
+```bash
+uvicorn app.main:app --reload --port 8000
+```
+
+Open:
+
+```text
+http://127.0.0.1:8000
+```
+
+The UI is backed by the same incident API and coordination engine used by the CLI.
+
+### Recommended Gemini + Firestore configuration
+
+```bash
+export WORKRELAY_DECISION_PROVIDER=gemini
+export WORKRELAY_STATE_STORE=firestore
+export GOOGLE_GENAI_USE_ENTERPRISE=TRUE
+export GOOGLE_CLOUD_PROJECT=workrelay
+export GOOGLE_CLOUD_LOCATION=global
+```
+
+Then start:
+
+```bash
+uvicorn app.main:app --reload --port 8000
+```
+
+### Browser workflow
+
+1. Open the Operations Console.
+2. Confirm `SYSTEM HEALTHY`.
+3. Enter an incident title.
+4. Enter the affected service.
+5. Select a severity.
+6. Describe the incident.
+7. Click **Create & Coordinate Incident**.
+8. Review the resulting incident.
+9. Select **View Details** to inspect Gemini reasoning and lifecycle events.
 
 ---
 
 ## Run the API locally
-
-Start FastAPI:
-
-```bash
-uvicorn app.main:app --reload
-```
 
 Health check:
 
@@ -689,6 +842,12 @@ workrelay/
 │   ├── models/
 │   │   └── incident.py
 │   │
+│   ├── templates/
+│   │   └── index.html
+│   │
+│   ├── static/
+│   │   └── style.css
+│   │
 │   ├── api.py
 │   └── main.py
 │
@@ -722,10 +881,12 @@ workrelay/
 
 Additional documentation is available in the repository:
 
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — system architecture, components, data flow, and design decisions
-- [`docs/DEMO.md`](docs/DEMO.md) — demonstration flow and evidence
-- [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) — development, testing, and troubleshooting
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — system architecture, components, data flow, UI integration, and design decisions
+- [`docs/DEMO.md`](docs/DEMO.md) — demonstration flow, browser workflow, and evidence
+- [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) — development, testing, local UI setup, and troubleshooting
 - [`docs/HACKATHON.md`](docs/HACKATHON.md) — original hackathon context and requirements
+
+These documents should be kept synchronized with the deployed application as the project evolves.
 
 ---
 
@@ -743,6 +904,14 @@ Additional documentation is available in the repository:
 - Scale-to-zero configuration
 - End-to-end Cloud Run → Gemini → workflow → Firestore execution
 
+### Implemented locally but awaiting new cloud deployment
+
+- Browser Operations Console
+- Browser incident intake
+- Dashboard statistics
+- Incident detail/timeline interface
+- UI styling and static assets
+
 ### Configured but not yet deployed/provisioned
 
 - Pub/Sub event-driven incident intake
@@ -750,20 +919,23 @@ Additional documentation is available in the repository:
 - Public production endpoint
 - Production authentication and authorization
 
-The repository intentionally distinguishes **deployed infrastructure** from **planned or future infrastructure**.
+The repository intentionally distinguishes **deployed infrastructure** from **implemented-but-not-yet-deployed features** and planned future infrastructure.
 
 ---
 
 ## Roadmap
 
-1. Add Pub/Sub for event-driven incident intake.
-2. Add production-grade observability and structured logs.
-3. Add API authentication and authorization.
-4. Validate retry and escalation behavior in the deployed environment.
-5. Replace deterministic operational actions with real operational adapters.
-6. Add stronger idempotency and duplicate-incident protection.
-7. Capture deployment and end-to-end evidence for portfolio/demo use.
-8. Expand operational integrations while maintaining controlled execution boundaries.
+1. Rebuild the container with the Operations Console included.
+2. Deploy the updated image to Cloud Run.
+3. Verify the browser UI through the deployed Cloud Run service.
+4. Add automated tests for important UI-serving and integration behavior where appropriate.
+5. Add Pub/Sub for event-driven incident intake.
+6. Add production-grade observability and structured logs.
+7. Add API authentication and authorization.
+8. Validate retry and escalation behavior in the deployed environment.
+9. Replace deterministic operational actions with real operational adapters.
+10. Add stronger idempotency and duplicate-incident protection.
+11. Expand operational integrations while maintaining controlled execution boundaries.
 
 ---
 
@@ -773,6 +945,7 @@ WorkRelay is intentionally designed around separation of concerns:
 
 | Layer | Responsibility |
 |---|---|
+| Browser Operations Console | Human-friendly incident intake and operational visibility |
 | Gemini / Google ADK | Intelligent workflow selection |
 | Decision Provider | Provides an approved coordination decision |
 | Coordinator | Connects decision-making to workflow execution |
@@ -791,9 +964,9 @@ The goal is to build an agentic system that can make useful operational decision
 
 ## Portfolio summary
 
-**WorkRelay demonstrates an agentic incident-response architecture using Gemini 3.5 Flash, Google ADK, FastAPI, Firestore, Artifact Registry, and Cloud Run. Gemini selects an approved response workflow, while deterministic application logic controls investigation, remediation, verification, retry, escalation, and lifecycle persistence.**
+**WorkRelay demonstrates an agentic incident-response architecture using Gemini 3.5 Flash, Google ADK, FastAPI, Firestore, Artifact Registry, and Cloud Run. Gemini selects an approved response workflow, while deterministic application logic controls investigation, remediation, verification, retry, escalation, and lifecycle persistence. A browser-based Operations Console provides incident intake, operational visibility, Gemini reasoning, and lifecycle inspection over the same backend.**
 
-The project has been tested locally and deployed to Google Cloud with a private Cloud Run service and dedicated least-privilege runtime identity.
+The project has been tested locally and deployed to Google Cloud with a private Cloud Run service and dedicated least-privilege runtime identity. The next release step is to deploy the new web console alongside the existing cloud backend.
 
 ---
 

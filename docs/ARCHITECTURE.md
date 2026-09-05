@@ -71,23 +71,55 @@ This separation allows the decision layer to use an LLM while keeping operationa
 
 ## Main components
 
-### 1. FastAPI and CLI interfaces
+### 1. FastAPI, Operations Console and CLI interfaces
 
-WorkRelay exposes two ways to submit and operate incidents:
+WorkRelay exposes three interface layers for interacting with incidents:
 
+- Browser-based Operations Console
 - FastAPI HTTP API
 - `run.py` command-line runner
 
-The interfaces create incident objects and pass them to the coordinator.
+The Operations Console is a human-facing web interface served directly by the FastAPI application. It provides incident intake, operational status visibility, recent-incident review, and detailed lifecycle inspection.
+
+The browser console does not make workflow decisions itself. It submits incidents to the same FastAPI API used by programmatic clients and the CLI, ensuring that all incidents pass through the same coordinator, decision-provider abstraction, deterministic workflow engine, and state store.
 
 The API currently provides:
 
+- `GET /` — Operations Console
 - `GET /health`
 - `POST /incidents`
 - `GET /incidents`
 - `GET /incidents/{incident_id}`
+- `/static/*` — browser UI assets
 
 The CLI is useful for reproducible local demonstrations and failure-path testing.
+
+The interface architecture is therefore:
+
+```text
+                    +----------------------+
+                    |       Browser        |
+                    +----------+-----------+
+                               |
+                               v
+                    +----------+-----------+
+                    | Operations Console   |
+                    | HTML / CSS / JS      |
+                    +----------+-----------+
+                               |
+                               v
+                    +----------+-----------+
+                    |      FastAPI         |
+                    +----------+-----------+
+                               |
+                    +----------+-----------+
+                    | IncidentCoordinator  |
+                    +----------+-----------+
+                               |
+                         Decision Provider
+```
+
+All three interfaces ultimately use the same application coordination and workflow execution path.
 
 ## 2. Incident model
 
@@ -341,7 +373,7 @@ This makes it possible to develop locally while retaining a clear path to Google
 
 ## 11. Google Cloud architecture
 
-The intended cloud architecture is:
+The current cloud architecture is:
 
 ```text
                     +------------------+
@@ -379,22 +411,31 @@ The intended cloud architecture is:
 
 - Google Cloud project `workrelay`
 - Cloud Run service `workrelay`
-- Artifact Registry repository and WorkRelay container image
+- Artifact Registry WorkRelay container image
 - Gemini 3.5 Flash through Google ADK / Vertex AI
 - Firestore Native database
 - Dedicated WorkRelay runtime service account
-- Private Cloud Run service
-- Cloud Run scale-to-zero configuration
+- Private Cloud Run access
+- Scale-to-zero configuration with maximum one instance
 - End-to-end Cloud Run → Gemini → Firestore incident workflow
 
-#### Configured but not yet deployed/provisioned
+#### Implemented locally and pending deployment
+
+- Browser-based Operations Console
+- HTML template and static CSS assets
+- UI incident intake and recent-incident visibility
+- Detailed incident lifecycle modal
+
+The next deployment step is to rebuild the container and deploy a new Cloud Run revision containing the Operations Console.
+
+#### Not yet deployed/provisioned
 
 - Pub/Sub topics and subscriptions
-- Production observability stack
-- Public production endpoint
-- Production authentication and authorization
+- production observability stack
+- public production endpoint
+- production authentication and authorization
 
-The architecture intentionally distinguishes **deployed infrastructure** from **configured or future infrastructure**.
+The architecture document intentionally distinguishes **deployed infrastructure** from **implemented locally** and **future infrastructure**.
 
 ## 12. Security model
 
@@ -402,7 +443,7 @@ The current design avoids embedding cloud credentials in application code.
 
 Local development uses Application Default Credentials.
 
-Cloud deployment uses the dedicated runtime service account:
+Cloud deployment should use the dedicated runtime service account:
 
 ```text
 workrelay-runtime@workrelay.iam.gserviceaccount.com
@@ -509,14 +550,23 @@ The CLI, test suite and documented configuration provide a repeatable developmen
 
 ## 16. Future evolution
 
-The next architectural steps are:
+The current architecture has already been deployed and verified on Google Cloud with:
 
-1. Deploy WorkRelay to Cloud Run.
-2. Connect the deployed service to Firestore.
-3. Introduce Pub/Sub for event-driven incident intake.
-4. Add production authentication and authorization.
-5. Add structured observability.
-6. Validate the complete workflow in Google Cloud.
-7. Add stronger operational controls around retries, idempotency and concurrent incidents.
+- Cloud Run
+- Gemini 3.5 Flash through Google ADK
+- Firestore persistence
+- Artifact Registry
+- Dedicated WorkRelay runtime service account
 
-The current architecture deliberately leaves these as future deployment steps rather than presenting them as already deployed capabilities.
+The browser-based Operations Console is implemented and has been verified locally against the same FastAPI application. The next deployment step is to rebuild the container and deploy a new Cloud Run revision containing the web UI.
+
+Future architectural evolution includes:
+
+1. Introduce Pub/Sub for event-driven incident intake.
+2. Add production authentication and authorization.
+3. Add structured observability and alerting.
+4. Validate cloud-native failure and recovery scenarios.
+5. Add stronger operational controls around retries, idempotency and concurrent incidents.
+6. Replace deterministic simulated operational actions with pluggable integrations for real logs, metrics, traces, health checks, and remediation systems.
+
+The architecture intentionally keeps these future capabilities behind explicit application boundaries so that additional automation can be introduced without giving the decision layer unrestricted operational control.

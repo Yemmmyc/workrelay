@@ -317,6 +317,8 @@ Google ADK
        +
 FastAPI
        +
+Operations Console
+       +
 Deterministic workflows
        +
 Retry / escalation
@@ -324,17 +326,27 @@ Retry / escalation
 Lifecycle state
        +
 Firestore support
+       +
+Cloud Run deployment
 ```
+
+Post-hackathon status:
+
+- The WorkRelay backend is deployed and verified on private Google Cloud Run.
+- Gemini 3.5 Flash through Google ADK is verified in the deployed workflow.
+- Firestore persistence is verified from the deployed service.
+- The browser-based Operations Console is implemented and locally verified.
+- The next Cloud Run revision will package the Operations Console into the deployed service.
 
 Current next steps:
 
-1. Deploy the application to Cloud Run.
-2. Validate the deployed service with Firestore.
-3. Add Pub/Sub event-driven intake.
-4. Add production authentication and authorization.
-5. Add structured observability.
-6. Validate cloud failure/recovery behavior.
-7. Capture deployment evidence for portfolio use.
+1. Deploy the Operations Console-enabled Cloud Run revision.
+2. Add Pub/Sub event-driven intake.
+3. Add production authentication and authorization.
+4. Add structured observability.
+5. Validate cloud failure/recovery behavior.
+6. Replace simulated operational actions with real operational adapters.
+7. Capture final deployment evidence for portfolio use.
 
 ## Documentation accuracy
 
@@ -353,18 +365,22 @@ It is accurate to say that WorkRelay:
 - supports retry and escalation
 - supports local and Firestore state persistence
 - has a FastAPI API and CLI
+- has a browser-based Operations Console
 - has been tested with a real Gemini end-to-end workflow
-- has Google Cloud infrastructure configured for development
+- has a verified private Cloud Run deployment
+- persists deployed incident state in Firestore
 
 ### Claims to avoid until verified
 
 Do not claim that WorkRelay currently:
 
-- runs as a production Cloud Run service
 - uses Pub/Sub in production
 - has a public production endpoint
 - has production-grade observability
 - automatically handles real external production incidents
+- provides production authentication and authorization
+
+The current Cloud Run deployment is a private development/portfolio deployment rather than a public production service.
 
 Those statements should only be added after the corresponding infrastructure is actually deployed and verified.
 
