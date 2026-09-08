@@ -4,7 +4,7 @@
 
 > **Current deployment:** WorkRelay is deployed privately on Google Cloud Run, using Gemini 3.5 Flash through Google ADK for workflow selection and Firestore for persistent incident state.
 >
-> **Web console:** WorkRelay also includes a browser-based Operations Console for incident intake, status monitoring, recent-incident review, and detailed lifecycle inspection. The new web UI has been verified locally; the Cloud Run deployment still needs to be rebuilt and redeployed with the UI changes.
+> **Web console:** WorkRelay also includes a browser-based Operations Console for incident intake, status monitoring, recent-incident review, and detailed lifecycle inspection. The web UI has been deployed and verified on the private Cloud Run service.
 
 ## What WorkRelay does
 
@@ -69,6 +69,8 @@ WorkRelay now includes a browser-based **Operations Console** built on top of th
 
 The console provides an operator-friendly interface for interacting with the incident coordination system without requiring direct API or CLI commands.
 
+![WorkRelay Operations Console](docs/screenshots/dashboard-overview.png)
+
 ### Current UI capabilities
 
 - System health indicator
@@ -87,6 +89,10 @@ The console provides an operator-friendly interface for interacting with the inc
 - Full incident lifecycle timeline
 - Resolution information
 - Responsive layout for smaller screens
+
+### Incident intake
+
+![WorkRelay incident creation](docs/screenshots/incident-creation.png)
 
 ### UI architecture
 
@@ -135,7 +141,7 @@ The console uses the same backend as the API and CLI, so incidents created from 
 
 ### Example browser execution
 
-A real local browser submission was completed with:
+A real browser execution was completed against the deployed WorkRelay service with:
 
 ```text
 Incident ID : INC-513D1311
@@ -157,7 +163,11 @@ VERIFICATION_STARTED
 INCIDENT_RESOLVED
 ```
 
-This demonstrates that the web console is connected to the real WorkRelay coordination path rather than being a static mockup.
+### Gemini-powered incident lifecycle
+
+![WorkRelay Gemini incident timeline](docs/screenshots/gemini-incident-timeline.png)
+
+This demonstrates that the deployed web console is connected to the real WorkRelay coordination path rather than being a static mockup.
 
 ---
 
@@ -183,7 +193,7 @@ This demonstrates that the web console is connected to the real WorkRelay coordi
 - The deployed container is referenced by an immutable image digest.
 - The deployed Gemini workflow has been tested end-to-end.
 - The resulting incident has been independently verified in Firestore.
-- Automated test suite: **32 passed** before the web-console changes; the final UI-inclusive suite must be rerun before the next release commit.
+- Automated test suite: **34 passed** in the final UI-inclusive test suite.
 
 ---
 
@@ -208,10 +218,10 @@ This demonstrates that the web console is connected to the real WorkRelay coordi
 | Browser incident intake | ✅ Verified |
 | Dashboard statistics | ✅ Implemented |
 | Incident detail/timeline | ✅ Implemented |
-| Automated tests | ⚠️ 32 passed before latest UI changes; final suite pending |
+| Automated tests | ✅ 34 passed |
 | Artifact Registry | ✅ Image previously built and pushed |
 | Cloud Run backend | ✅ Deployed and verified |
-| Cloud Run UI deployment | ⏳ New UI image still needs deployment |
+| Cloud Run UI deployment | ✅ Deployed and verified |
 | Cloud Run access | 🔒 Private |
 | Cloud Run scaling | ✅ Scale-to-zero, max 1 instance |
 | Pub/Sub | ⏳ Not yet provisioned |
@@ -966,7 +976,7 @@ The goal is to build an agentic system that can make useful operational decision
 
 **WorkRelay demonstrates an agentic incident-response architecture using Gemini 3.5 Flash, Google ADK, FastAPI, Firestore, Artifact Registry, and Cloud Run. Gemini selects an approved response workflow, while deterministic application logic controls investigation, remediation, verification, retry, escalation, and lifecycle persistence. A browser-based Operations Console provides incident intake, operational visibility, Gemini reasoning, and lifecycle inspection over the same backend.**
 
-The project has been tested locally and deployed to Google Cloud with a private Cloud Run service and dedicated least-privilege runtime identity. The next release step is to deploy the new web console alongside the existing cloud backend.
+The project has been tested locally and deployed to Google Cloud with a private Cloud Run service and dedicated least-privilege runtime identity. The deployed web console has also been verified against the Cloud Run service.
 
 ---
 
